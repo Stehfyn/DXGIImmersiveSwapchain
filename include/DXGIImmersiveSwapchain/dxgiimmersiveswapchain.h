@@ -256,3 +256,11 @@ DXGIImmersiveSwapchain_Present2(
     BOOL                    fRestart,
     BOOL                    fVsync
     );
+
+EXTERN_C
+HRESULT PFORCEINLINE WINAPI
+DXGIImmersiveSwapchain_SetSourceSize(
+    DXGIImmersiveSwapchain* pImmersiveSwapchain,
+    UINT                    Width,
+    UINT                    Height
+    );

@@ -229,7 +229,6 @@ GetSwapchainDescription(
       .BufferCount = 3,
       .Scaling     = DXGI_SCALING_STRETCH,
       .SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD,
-      //.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
       .AlphaMode   = DXGI_ALPHA_MODE_PREMULTIPLIED,
       .Flags       = DXGI_SWAPCHAIN_2_ENABLE_IMMEDIATE_PRESENT | DXGI_SWAPCHAIN_2_ENABLE_WAIT_FOR_NEXT_FRAME_RESOURCES
     };
@@ -331,8 +330,8 @@ DestroySwapchain(
     ASSERT_W32(!uRefCnt);
     uRefCnt = ID2D1Factory2_Release(pImmersiveSwapchain->pD2D1Factory2);
     ASSERT_W32(!uRefCnt);
-    uRefCnt = IDXGISurface2_Release(pImmersiveSwapchain->pDXGISurface2);
-    ASSERT_W32(!uRefCnt);
+    //uRefCnt = IDXGISurface2_Release(pImmersiveSwapchain->pDXGISurface2);
+    //ASSERT_W32(!uRefCnt);
     uRefCnt = IDXGISwapChain2_Release(pImmersiveSwapchain->pDXGISwapchain2);
     ASSERT_W32(!uRefCnt);
 
@@ -609,7 +608,14 @@ InitD2D(
     HWND hWnd)
 {
     HRESULT hr;
-
+    const D3D_FEATURE_LEVEL c_d3d_feature_levels[] =
+    {
+      D3D_FEATURE_LEVEL_11_1,
+      D3D_FEATURE_LEVEL_11_0,
+      //D3D_FEATURE_LEVEL_12_0, 
+      //D3D_FEATURE_LEVEL_12_1,
+      //D3D_FEATURE_LEVEL_12_2
+    };
     ASSERT_W32(SUCCEEDED(hr =
       D3D11CreateDevice(
         0,
@@ -618,16 +624,16 @@ InitD2D(
         //D3D_DRIVER_TYPE_WARP,
         0,
         //(D3D11_CREATE_DEVICE_FLAG)(
-          /*(DxFlags)*/D3D11_CREATE_DEVICE_2_WELL_RESPECTED |
-          /*(DxFlags)*/D3D11_CREATE_DEVICE_2_FORCE_SINGLETHREADED |
-          /*(DxFlags)*/D3D11_CREATE_DEVICE_2_D2D_COMPATIBLE |
+          ///*(DxFlags)*/D3D11_CREATE_DEVICE_2_WELL_RESPECTED |
+          ///*(DxFlags)*/D3D11_CREATE_DEVICE_2_FORCE_SINGLETHREADED |
+          /*(DxFlags)*/D3D11_CREATE_DEVICE_2_D2D_COMPATIBLE | D3D11_CREATE_DEVICE_VIDEO_SUPPORT |
           /*(DxFlags)*/D3D11_DEVICE_NO_DEBUG_IN_RELEASE
         //)
         ,
-        //c_d3d_feature_levels,
-        //ARRAYSIZE(c_d3d_feature_levels),
-        NULL,
-        0,
+        c_d3d_feature_levels,
+        ARRAYSIZE(c_d3d_feature_levels),
+        //NULL,
+        //0,
         D3D11_SDK_VERSION,
         &pImmersiveSwapchain->pD3D11Device,
         0,
@@ -664,16 +670,13 @@ InitD2D(
       const D2D1_BITMAP_PROPERTIES1 c_bitmap_props = GetSurfaceBitmapProperties(GetDpiForWindow(hWnd));
       ReleaseDC(0, hdc);
 
-      IDXGIDevice3_GetAdapter(pImmersiveSwapchain->pDXGIDevice3, &pImmersiveSwapchain->pDXGIAdapter);
-      IDXGIAdapter_GetParent(pImmersiveSwapchain->pDXGIAdapter, &IID_IDXGIFactory2, (void**)&pImmersiveSwapchain->pDXGIFactory2);
-
-      //ASSERT_W32(SUCCEEDED(
-      //  CreateDXGIFactory2(
-      //    DXGI_FACTORY_NO_DEBUG_IN_RELEASE,
-      //    &IID_IDXGIFactory2,
-      //    (void**)&pImmersiveSwapchain->pDXGIFactory2
-      //  )
-      //));
+      ASSERT_W32(SUCCEEDED(
+        CreateDXGIFactory2(
+          DXGI_FACTORY_NO_DEBUG_IN_RELEASE,
+          &IID_IDXGIFactory2,
+          (void**)&pImmersiveSwapchain->pDXGIFactory2
+        )
+      ));
 
       ASSERT_W32(SUCCEEDED(
         IDXGIFactory2_CreateSwapChainForComposition(
@@ -687,8 +690,8 @@ InitD2D(
     
       ASSERT_W32(SUCCEEDED(
         D2D1CreateFactory(
-          D2D1_FACTORY_TYPE_SINGLE_THREADED,
-          //D2D1_FACTORY_TYPE_MULTI_THREADED,
+          //D2D1_FACTORY_TYPE_SINGLE_THREADED,
+          D2D1_FACTORY_TYPE_MULTI_THREADED,
           &IID_ID2D1Factory2,
           &c_d2d_factory_options,
           &pImmersiveSwapchain->pD2D1Factory2
@@ -707,8 +710,8 @@ InitD2D(
       ASSERT_W32(SUCCEEDED(
         ID2D1Device1_CreateDeviceContext(
           pImmersiveSwapchain->pD2D1Device,
-          D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
-          //D2D1_DEVICE_CONTEXT_OPTIONS_ENABLE_MULTITHREADED_OPTIMIZATIONS,
+          //D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
+          D2D1_DEVICE_CONTEXT_OPTIONS_ENABLE_MULTITHREADED_OPTIMIZATIONS,
           &pImmersiveSwapchain->pD2D1DeviceContext
         )
       ));
@@ -1493,7 +1496,8 @@ DXGIImmersiveSwapchain_Present(
     
     //if (pImmersiveSwapchain->pProc)
     //  pImmersiveSwapchain->pProc(pImmersiveSwapchain->hwnd);
-
+    DXGI_SWAP_CHAIN_DESC1 desc;
+    HRESULT hr = IDXGISwapChain1_GetDesc1(pImmersiveSwapchain->pDXGISwapchain2, &desc);
     /* 2. Present the D2D front buffer */
     {
       ASSERT_W32(SUCCEEDED(IDXGISwapChain2_Present(
@@ -1542,16 +1546,25 @@ DXGIImmersiveSwapchain_Present2(
     UINT sync = !!!fRestart;
     UINT flags = 0;
     DXGI_PRESENT_PARAMETERS presentParameters = { 0 };
+    DXGI_SWAP_CHAIN_DESC1 desc;
+    hr = IDXGISwapChain1_GetDesc1(pImmersiveSwapchain->pDXGISwapchain2, &desc);
 
-    if (!fVsync)
-      flags |= DXGI_PRESENT_RESTART | DXGI_PRESENT_ALLOW_TEARING;
+    IDXGISwapChain1_Present(pImmersiveSwapchain->pDXGISwapchain2, 0,
+      fRestart ? DXGI_PRESENT_RESTART : 0);
 
-    flags |= DXGI_PRESENT_DO_NOT_WAIT;
-
-    if (fRestart)
-      hr = IDXGISwapChain2_Present1(pImmersiveSwapchain->pDXGISwapchain2, sync, DXGI_PRESENT_DO_NOT_SEQUENCE, &presentParameters);
-    hr = IDXGISwapChain2_Present1(pImmersiveSwapchain->pDXGISwapchain2, sync, flags, &presentParameters);
-
+    if(fRestart)
+      IDXGISwapChain1_Present(pImmersiveSwapchain->pDXGISwapchain2, 1,
+        DXGI_PRESENT_DO_NOT_SEQUENCE);
     return hr;
 
+}
+
+EXTERN_C
+HRESULT PFORCEINLINE WINAPI
+DXGIImmersiveSwapchain_SetSourceSize(
+    DXGIImmersiveSwapchain* pImmersiveSwapchain,
+    UINT                    Width,
+    UINT                    Height)
+{
+    return IDXGISwapChain2_SetSourceSize(pImmersiveSwapchain->pDXGISwapchain2, Width, Height);
 }
